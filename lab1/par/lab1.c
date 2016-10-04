@@ -9,7 +9,7 @@
 #define send_data_tag 2001
 #define return_data_tag 2002
 
-void problemOneMaster(int matrix[ROW][COLUMN], int iterations, int np, clock_t begin) {
+void problemOneMaster(int matrix[ROW][COLUMN], int iterations, int np) {
 	MPI_Status status;
 	int i, j, p;
 	int array[ROW][COLUMN];
@@ -32,10 +32,7 @@ void problemOneMaster(int matrix[ROW][COLUMN], int iterations, int np, clock_t b
 				printf("%d\t", array[i][j]);
 		}
 		printf("\n");
-	}
-	clock_t end = clock();
-	double time_spent = (double)(end - begin) / CLOCKS_PER_SEC;
-	printf("Time spent to execute the program: %fs\n", time_spent);
+	}	
 }
 
 void problemOneSlave() {
@@ -61,7 +58,7 @@ void problemOneSlave() {
 	MPI_Send(&send_buffer, 4, MPI_INT, 0, return_data_tag, MPI_COMM_WORLD);
 }
 
-void problemTwoMaster(int matrix[ROW][COLUMN], int iterations, int np, clock_t begin) {
+void problemTwoMaster(int matrix[ROW][COLUMN], int iterations, int np) {
 	MPI_Status status;
 	int i, j, p;
 	int array[ROW][COLUMN];
@@ -85,9 +82,6 @@ void problemTwoMaster(int matrix[ROW][COLUMN], int iterations, int np, clock_t b
 		}
 		printf("\n");
 	}
-	clock_t end = clock();
-	double time_spent = (double)(end - begin) / CLOCKS_PER_SEC;
-	printf("Time spent to execute the program: %fs\n", time_spent);
 }
 
 void problemTwoSlave() {
@@ -119,8 +113,6 @@ void problemTwoSlave() {
 }
 
 int main (int argc, char *argv[]) {
-	clock_t begin = clock();
-
 	if (argc < 2) {
     printf("No arguments.\n");
     return 0;
@@ -130,15 +122,7 @@ int main (int argc, char *argv[]) {
 
 	int problemValue = atoi(argv[1]);
   int initalValue = atoi(argv[2]);
-  int iterations = atoi(argv[3]);
-
-	// Initialize the array with initial value provided from program arguments.
-  int matrix[ROW][COLUMN];
-  for (i = 0; i < ROW; i++) {
-    for ( j = 0; j < COLUMN; j++) {
-      matrix[i][j] = initalValue;
-    }
-  }
+  int iterations = atoi(argv[3]);	
 
 	err = MPI_Init(&argc, &argv);
 	if (err != MPI_SUCCESS)
@@ -151,17 +135,32 @@ int main (int argc, char *argv[]) {
 	MPI_Comm_rank (MPI_COMM_WORLD, &myid);
 
 	if (myid == 0) {
+		struct timeval begin, end;
+		gettimeofday(&begin, NULL);
+
+		// Initialize the array with initial value provided from program arguments.
+		int matrix[ROW][COLUMN];
+		for (i = 0; i < ROW; i++) {
+			for ( j = 0; j < COLUMN; j++) {
+		    matrix[i][j] = initalValue;
+		  }
+		}
+
 		switch (problemValue) {
 			case 1:
-				problemOneMaster(matrix, iterations, np, begin);
+				problemOneMaster(matrix, iterations, np);
 				break;
 			case 2:
-				problemTwoMaster(matrix, iterations, np, begin);
+				problemTwoMaster(matrix, iterations, np);
 				break;
 			default:
 				printf("Invalid program choice. Please select 1 or 2.\n");
 				break;
 		}
+
+		gettimeofday(&end, NULL);
+		double time_spent = (end.tv_sec - begin.tv_sec) + ((end.tv_usec - begin.tv_usec)/1000000.0);
+  	printf("Time spent to execute the program: %fs\n", time_spent);
 	} else {
 		switch (problemValue) {
 			case 1:

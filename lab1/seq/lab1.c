@@ -1,7 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
-#include <time.h>
+#include <sys/time.h>
 
 #define ROW 8
 #define COLUMN 8
@@ -38,12 +38,15 @@ void problemTwo(int (*matrix)[8][8], int iterations) {
 
 int main(int argc, char const *argv[]) {
   // Start clock
-  clock_t begin = clock();
+  // clock_t begin = clock();
+  struct timeval begin, end;
 
   if (argc < 2) {
     printf("No arguments.\n");
     return 0;
   }
+  gettimeofday(&begin, NULL);
+
   int problem, value, iterations;
   problem = atoi(argv[1]);
   value = atoi(argv[2]);
@@ -79,11 +82,9 @@ int main(int argc, char const *argv[]) {
   }
 
   // End clock and print time
-  clock_t end = clock();
-  double time_spent = (double)(end - begin) / CLOCKS_PER_SEC;
-  float time = (((float)end-(float)begin)/ 1000000.0F)*1000;
-  // double time_spent = end / CLOCKS_PER_SEC;
+  gettimeofday(&end, NULL);
+  double time_spent = (end.tv_sec - begin.tv_sec) + ((end.tv_usec - begin.tv_usec)/1000000.0);
   printf("Time spent to execute the program: %fs\n", time_spent);
-  printf("Sequential process finished the work in %f ms\n", time);
+
   return 0;
 }
