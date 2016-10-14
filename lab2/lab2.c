@@ -2,12 +2,14 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <sys/time.h>
+#include <omp.h>
 
 #define ROW 10
 #define COLUMN 10
 
 void problemOne(int valeurInitiale, int nombreIterations);
 void problemTwo(int valeurInitiale, int nombreIterations);
+void initMatrix(int (*matrix)[ROW][COLUMN], int value);
 
 int main(int argc, char const *argv[]) {
   if (argc < 4) {
@@ -22,12 +24,15 @@ int main(int argc, char const *argv[]) {
   // Execute right program base on program argument.
   switch (numeroProbleme) {
     case 1:
+      printf("\n\n");
       problemOne(valeurInitiale, nombreIterations);
       break;
     case 2:
-      // problemTwo(valeurInitiale, nombreIterations);
+      printf("\n\n");
+      problemTwo(valeurInitiale, nombreIterations);
       break;
     default:
+      printf("\n\n");
       printf("Invalid program choice. Please select 1 or 2.\n");
       break;
   }
@@ -35,154 +40,134 @@ int main(int argc, char const *argv[]) {
   return EXIT_SUCCESS;
 }
 
-void problemOne(int valeurInitiale, int nombreIterations) {
-  // Start clock
-  struct timeval begin, end;
-  gettimeofday(&begin, NULL);
+void problemOne(int valeurInitiale, int nombreIterations)
+{
+  int i, j, k;
   int matrix[ROW][COLUMN];
 
-  int i, j, k;
-  for (k = 0; k <= nombreIterations; k++) {
+  // init matrix with initial value
+  initMatrix(&matrix, valeurInitiale);
+
+  // execute operations
+  for (k = 1; k <= nombreIterations; k++) {
     for (i = 0; i < ROW; i++) {
       for (j = 0; j < COLUMN; j++) {
         usleep(50000);
-        if (k == 0) {
-          matrix[i][j] = valeurInitiale;
-        } else {
-          matrix[i][j] = matrix[i][j] + i + j;
-        }
+        matrix[i][j] = matrix[i][j] + i + j;
       }
     }
   }
 
-  // Print the final results matrix.
-  printf("Matrice sequentielle\n");
-  printf("---------------------------------------------------------------------\n");
+  // print the final results matrix.
+  printf("%s\n", "Matrice séquentielle");
+  printf("---------------------------------------------------------------------------\n");
   for (size_t i = 0; i < ROW; i++) {
     for (size_t j = 0; j < COLUMN; j++) {
       printf("%d\t", matrix[i][j]);
     }
     printf("\n");
   }
+  printf("--------------------------------------------------------------------------\n");
+  printf("\n");
 
-  // End clock and print time
-  gettimeofday(&end, NULL);
-  double time_spent = (end.tv_sec - begin.tv_sec) + ((end.tv_usec - begin.tv_usec)/1000000.0);
-  printf("Sequential time spent: %fs\n", time_spent);
-  printf("---------------------------------------------------------------------\n");
+  // init matrix with initial value
+  initMatrix(&matrix, valeurInitiale);
 
-  struct timeval proc_begin, proc_end;
-  double total_proc_time;
-  int nprocs;
-
+  // execute operation in parallel
+  #pragma omp parallel for private(j, k)
   for (i = 0; i < ROW; i++) {
-    for (j = 0; j < COLUMN; j++) {
-      matrix[i][j] = valeurInitiale;
-    }
-    printf("\n");
-  }
-
-  #pragma omp parallel private(proc_begin, proc_end) default(shared)
-  {
-    nprocs = omp_get_num_threads();
-    gettimeofday(&proc_begin, NULL);
-    #pragma omp for collapse(3)
     for (k = 1; k <= nombreIterations; k++) {
-      for (i = 0; i < ROW; i++) {
-        for (j = 0; j < COLUMN; j++) {
-          usleep(50000);
-          // if (k == 0) {
-          //   #pragma omp atomic write
-          //   matrix[i][j] = valeurInitiale;
-          // } else {
-          //   #pragma omp atomic
-          //   matrix[i][j] = matrix[i][j] + i + j;
-          // }
-          #pragma omp atomic
-          matrix[i][j] = matrix[i][j] + i + j;
-        }
+      for (j = 0; j < COLUMN; j++) {
+        usleep(50000);
+        matrix[i][j] = matrix[i][j] + i + j;
       }
     }
-    gettimeofday(&proc_end, NULL);
-    #pragma omp atomic
-    total_proc_time += (proc_end.tv_sec - proc_begin.tv_sec) + ((proc_end.tv_usec - proc_begin.tv_usec)/1000000.0);
   }
 
-  printf("Matrice parallele\n");
-  printf("---------------------------------------------------------------------\n");
   // Print the final results matrix.
+  printf("%s\n", "Matrice parallèle");
+  printf("---------------------------------------------------------------------------\n");
   for (size_t i = 0; i < ROW; i++) {
     for (size_t j = 0; j < COLUMN; j++) {
       printf("%d\t", matrix[i][j]);
     }
     printf("\n");
   }
-
-  double tp = total_proc_time / nprocs;
-  printf("Average time spent by process: %f\n", tp);
-  printf("Acceleration: %f\n", time_spent/tp);
-  printf("Efficiency: %f\n", time_spent/(tp*nprocs));
-  printf("---------------------------------------------------------------------\n");
+  printf("---------------------------------------------------------------------------\n");
 
 }
 
-// void problemTwo(int valeurInitiale, int nombreIterations) {
-//   // Start clock
-//   struct timeval begin, end;
-//   gettimeofday(&begin, NULL);
+void problemTwo(int valeurInitiale, int nombreIterations)
+{
+  int i, j, k;
+  int matrix[ROW][COLUMN];
 
-//   int i, j, k;
-//   for (k = 1; k <= nombreIterations; k++) {
-//     for (i = 0; i < ROW; i++) {
-//       for (j = COLUMN-1; j >= 0; j--) {
-//         usleep(50000);
-//         if (j == COLUMN-1) {
-//           #pragma omp atomic
-//           (*matrix)[i][j] = (*matrix)[i][j] + i;
-//         } else {
-//           #pragma omp atomic
-//           (*matrix)[i][j] = (*matrix)[i][j] + (*matrix)[i][j+1];
-//         }
-//       }
-//     }
-//   }
+  // init matrix with initial value
+  initMatrix(&matrix, valeurInitiale);
 
-//   // End clock and print time
-//   gettimeofday(&end, NULL);
-//   double time_spent = (end.tv_sec - begin.tv_sec) + ((end.tv_usec - begin.tv_usec)/1000000.0);
-//   printf("Sequential time spent: %fs\n", time_spent);
+  // execute operations
+  for (k = 1; k <= nombreIterations; k++) {
+    for (j = COLUMN-1; j >= 0; j--) {
+      for (i = 0; i < ROW; i++) {
+        usleep(50000);
+        if (j == COLUMN-1) {
+          matrix[i][j] = matrix[i][j] + i;
+        } else {
+          matrix[i][j] = matrix[i][j] + matrix[i][j+1];
+        }
+      }
+    }
+  }
 
-//   struct timeval proc_begin, proc_end;
-//   double total_proc_time;
-//   int nprocs;
+  // print the final results matrix.
+  printf("%s\n", "Matrice séquentielle");
+  printf("---------------------------------------------------------------------------\n");
+  for (size_t i = 0; i < ROW; i++) {
+    for (size_t j = 0; j < COLUMN; j++) {
+      printf("%d\t", matrix[i][j]);
+    }
+    printf("\n");
+  }
+  printf("--------------------------------------------------------------------------\n");
+  printf("\n");
 
+  // init matrix with initial value
+  initMatrix(&matrix, valeurInitiale);
 
-//   #pragma omp parallel private(proc_begin, proc_end) default(shared)
-//   {
-//     nprocs = omp_get_num_threads();
-//     gettimeofday(&proc_begin, NULL);
-//     #pragma omp for
-//     for (k = 1; k <= nombreIterations; k++) {
-//       for (i = 0; i < ROW; i++) {
-//         for (j = COLUMN-1; j >= 0; j--) {
-//           usleep(50000);
-//           if (j == COLUMN-1) {
-//             #pragma omp atomic
-//             (*matrix)[i][j] = (*matrix)[i][j] + i;
-//           } else {
-//             #pragma omp atomic
-//             (*matrix)[i][j] = (*matrix)[i][j] + (*matrix)[i][j+1];
-//           }
-//         }
-//       }
-//     }
-//     gettimeofday(&proc_end, NULL);
-//     #pragma omp atomic
-//     total_proc_time += (proc_end.tv_sec - proc_begin.tv_sec) + ((proc_end.tv_usec - proc_begin.tv_usec)/1000000.0);
-//   }
+  // execute operation in parallel
+  #pragma omp parallel for private(j, k)
+  for (i = 0; i < ROW; i++) {
+    for (k = 1; k <= nombreIterations; k++) {
+      for (j = COLUMN-1; j >= 0; j--) {
+        usleep(50000);
+        if (j == COLUMN-1) {
+          matrix[i][j] = matrix[i][j] + i;
+        } else {
+          matrix[i][j] = matrix[i][j] + matrix[i][j+1];
+        }
+      }
+    }
+  }
 
-//   double tp = total_proc_time / nprocs;
-//   printf("Average time spent by process: %f\n", tp);
-//   printf("Acceleration: %f\n", time_spent/tp);
-//   printf("Efficiency: %f\n", time_spent/(tp*nprocs));
-// }
+  // Print the final results matrix.
+  printf("%s\n", "Matrice parallèle");
+  printf("---------------------------------------------------------------------------\n");
+  for (size_t i = 0; i < ROW; i++) {
+    for (size_t j = 0; j < COLUMN; j++) {
+      printf("%d\t", matrix[i][j]);
+    }
+    printf("\n");
+  }
+  printf("---------------------------------------------------------------------------\n");
+}
+
+void initMatrix(int (*matrix)[ROW][COLUMN], int value) 
+{
+  for (int i = 0; i < ROW; ++i)
+  {
+    for (int j = 0; j < COLUMN; ++j)
+    {
+      (*matrix)[i][j] = value;
+    }
+  }
+}
