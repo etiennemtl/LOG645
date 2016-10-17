@@ -24,15 +24,15 @@ int main(int argc, char const *argv[]) {
   // Execute right program base on program argument.
   switch (numeroProbleme) {
     case 1:
-      printf("\n\n");
+      printf("\n");
       problemOne(valeurInitiale, nombreIterations);
       break;
     case 2:
-      printf("\n\n");
+      printf("\n");
       problemTwo(valeurInitiale, nombreIterations);
       break;
     default:
-      printf("\n\n");
+      printf("\n");
       printf("Invalid program choice. Please select 1 or 2.\n");
       break;
   }
@@ -44,6 +44,12 @@ void problemOne(int valeurInitiale, int nombreIterations)
 {
   int i, j, k;
   int matrix[ROW][COLUMN];
+  int num_threads;
+
+  struct timeval begin, end;
+  double time_spent_seq;
+  double time_spent_par;
+  gettimeofday(&begin, NULL);
 
   // init matrix with initial value
   initMatrix(&matrix, valeurInitiale);
@@ -58,6 +64,9 @@ void problemOne(int valeurInitiale, int nombreIterations)
     }
   }
 
+  gettimeofday(&end, NULL);
+  time_spent_seq = (end.tv_sec - begin.tv_sec) + ((end.tv_usec - begin.tv_usec)/1000000.0);
+
   // print the final results matrix.
   printf("%s\n", "Matrice séquentielle");
   printf("---------------------------------------------------------------------------\n");
@@ -69,6 +78,13 @@ void problemOne(int valeurInitiale, int nombreIterations)
   }
   printf("--------------------------------------------------------------------------\n");
   printf("\n");
+
+  #pragma omp parallel shared(num_threads)
+  {
+    num_threads = omp_get_num_threads();
+  }
+
+  double start_time = omp_get_wtime();
 
   // init matrix with initial value
   initMatrix(&matrix, valeurInitiale);
@@ -84,6 +100,8 @@ void problemOne(int valeurInitiale, int nombreIterations)
     }
   }
 
+  time_spent_par = omp_get_wtime() - start_time;
+
   // Print the final results matrix.
   printf("%s\n", "Matrice parallèle");
   printf("---------------------------------------------------------------------------\n");
@@ -94,6 +112,12 @@ void problemOne(int valeurInitiale, int nombreIterations)
     printf("\n");
   }
   printf("---------------------------------------------------------------------------\n");
+  printf("\n");
+  printf("Temps d'exécution séquentiel: %f (s)\n", time_spent_seq);
+  printf("Temps d'exécution parallèle: %f (s)\n", time_spent_par);
+  printf("Nombre de processeur: %d\n", num_threads);
+  printf("Accélération: %f\n", time_spent_seq/time_spent_par);
+  printf("Efficacité: %f\n", (time_spent_seq/time_spent_par)/num_threads);
 
 }
 
@@ -101,6 +125,12 @@ void problemTwo(int valeurInitiale, int nombreIterations)
 {
   int i, j, k;
   int matrix[ROW][COLUMN];
+  int num_threads;
+
+  struct timeval begin, end;
+  double time_spent_seq;
+  double time_spent_par;
+  gettimeofday(&begin, NULL);
 
   // init matrix with initial value
   initMatrix(&matrix, valeurInitiale);
@@ -119,6 +149,9 @@ void problemTwo(int valeurInitiale, int nombreIterations)
     }
   }
 
+  gettimeofday(&end, NULL);
+  time_spent_seq = (end.tv_sec - begin.tv_sec) + ((end.tv_usec - begin.tv_usec)/1000000.0);
+
   // print the final results matrix.
   printf("%s\n", "Matrice séquentielle");
   printf("---------------------------------------------------------------------------\n");
@@ -130,6 +163,13 @@ void problemTwo(int valeurInitiale, int nombreIterations)
   }
   printf("--------------------------------------------------------------------------\n");
   printf("\n");
+
+  #pragma omp parallel shared(num_threads)
+  {
+    num_threads = omp_get_num_threads();
+  }
+
+  double start_time = omp_get_wtime();
 
   // init matrix with initial value
   initMatrix(&matrix, valeurInitiale);
@@ -149,6 +189,8 @@ void problemTwo(int valeurInitiale, int nombreIterations)
     }
   }
 
+  time_spent_par = omp_get_wtime() - start_time;
+
   // Print the final results matrix.
   printf("%s\n", "Matrice parallèle");
   printf("---------------------------------------------------------------------------\n");
@@ -159,6 +201,12 @@ void problemTwo(int valeurInitiale, int nombreIterations)
     printf("\n");
   }
   printf("---------------------------------------------------------------------------\n");
+  printf("\n");
+  printf("Temps d'exécution séquentiel: %f (s)\n", time_spent_seq);
+  printf("Temps d'exécution parallèle: %f (s)\n", time_spent_par);
+  printf("Nombre de processeur: %d\n", num_threads);
+  printf("Accélération: %f\n", time_spent_seq/time_spent_par);
+  printf("Efficacité: %f\n", (time_spent_seq/time_spent_par)/num_threads);
 }
 
 void initMatrix(int (*matrix)[ROW][COLUMN], int value) 
