@@ -90,12 +90,15 @@ void problemOne(int valeurInitiale, int nombreIterations)
   initMatrix(&matrix, valeurInitiale);
 
   // execute operation in parallel
-  #pragma omp parallel for private(j, k)
-  for (i = 0; i < ROW; i++) {
+  #pragma omp parallel private(k)
+  {
     for (k = 1; k <= nombreIterations; k++) {
-      for (j = 0; j < COLUMN; j++) {
-        usleep(50000);
-        matrix[i][j] = matrix[i][j] + i + j;
+      #pragma omp for collapse(2) private(j, i)
+      for (i = 0; i < ROW; i++) {
+        for (j = 0; j < COLUMN; j++) {
+          usleep(50000);
+          matrix[i][j] = matrix[i][j] + i + j;
+        }
       }
     }
   }
