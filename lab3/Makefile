@@ -23,4 +23,3 @@ run:
 clean:
 	/bin/rm -f *~
 	/bin/rm -f *.o
-
