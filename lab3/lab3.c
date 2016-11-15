@@ -15,14 +15,17 @@
 #define END_TAG 103
 #define VERTICAL 0
 #define HORIZONTAL 1
+#define MODE_COMPLET 0
+#define MODE_PAR 1
+#define MODE_NON_VERBOSE 1
 
 // Global variables
-int size, id, n, m, np, procs, matrixsize, direction;
+int size, id, n, m, np, procs, matrixsize, direction, mode;
 double td, h;
 
 // Functions declarations
-void executeseq(int n, int m, int np, double matrix[np][n][m]);
-void executepar(int n, int m, int np, double matrix[np][n][m]);
+void executeseq(int n, int m, int np, double matrix[2][n][m]);
+void executepar(int n, int m, int np, double matrix[2][n][m]);
 void initmatrix(int rows, int columns, double matrix[rows][columns]);
 void zeromatrix(int rows, int columns, int iterations, double matrix[iterations][rows][columns]);
 void printmatrix(int rows, int columns, double matrix[rows][columns]);
@@ -34,15 +37,25 @@ int main(int argc, char* argv[])
     MPI_Init(&argc, &argv);
     
     // Validate parameters
-    if (argc >= 6)
+    if (argc == 7)
     {
         n     = atoi(argv[1]);
         m     = atoi(argv[2]);
         np    = atoi(argv[3]);
         td    = atof(argv[4]);
         h     = atof(argv[5]);
-        procs = atoi (argv[6]);
-        matrixsize = np + 1;
+        procs = atoi(argv[6]);
+        mode  = 0;
+    }
+    else if (argc == 8)
+    {
+        n     = atoi(argv[1]);
+        m     = atoi(argv[2]);
+        np    = atoi(argv[3]);
+        td    = atof(argv[4]);
+        h     = atof(argv[5]);
+        procs = atoi(argv[6]);
+        mode  = atoi(argv[7]);
     }
     else
     {
@@ -55,35 +68,36 @@ int main(int argc, char* argv[])
     MPI_Comm_size(MPI_COMM_WORLD, &size);
     
     if (id == MASTER) {
-        printf("n=%d, m=%d, np=%d, td=%.5f, h=%.5f\n", n, m, np, td, h);
-        double matrix[matrixsize][n][m];
-        zeromatrix(n, m, matrixsize, matrix);
+        double matrix[2][n][m];
+        zeromatrix(n, m, 2, matrix);
         
-        printf("Version sequentiel\n");
+        if (mode != MODE_PAR) {
+            if (mode == MODE_COMPLET) printf("Version sequentiel\n");
+            // Initialize la matrice
+            initmatrix(n, m, matrix[0]);
+            if (mode == MODE_COMPLET) printf("initiale\n====\n");
+            // Affiche la matrice initial
+            if (mode == MODE_COMPLET) printmatrix(n, m, matrix[0]);
+            // Demarrer le timer
+            start = getcurrenttime();
+            // Traitement  sequentiel
+            executeseq(n, m, np, matrix);
+            // Arreter le timer
+            end = getcurrenttime();
+            timeseq = end - start;
+            // Affiche la matrice initial
+            if (mode == MODE_COMPLET) printf("final\n=====\n");
+            if (mode == MODE_COMPLET) printmatrix(n, m, matrix[np%2]);
+        }
+        
+        
+        if (mode == MODE_COMPLET) printf("\n\n");
+        if (mode == MODE_COMPLET) printf("Version parallele\n");
         // Initialize la matrice
         initmatrix(n, m, matrix[0]);
-        printf("initiale\n====\n");
+        if (mode == MODE_COMPLET) printf("initiale\n====\n");
         // Affiche la matrice initial
-        printmatrix(n, m, matrix[0]);
-        // Demarrer le timer
-        start = getcurrenttime();
-        // Traitement  sequentiel
-        executeseq(n, m, np, matrix);
-        // Arreter le timer
-        end = getcurrenttime();
-        timeseq = end - start;
-        // Affiche la matrice initial
-        printf("final\n=====\n");
-        printmatrix(n, m, matrix[np]);
-        
-        
-        printf("\n\n");
-        printf("Version parallele\n");
-        // Initialize la matrice
-        initmatrix(n, m, matrix[0]);
-        printf("initiale\n====\n");
-        // Affiche la matrice initial
-        printmatrix(n, m, matrix[0]);
+        if (mode == MODE_COMPLET) printmatrix(n, m, matrix[0]);
         // Demarrer le timer
         start = getcurrenttime();
         // Traitement  sequentiel
@@ -92,18 +106,18 @@ int main(int argc, char* argv[])
         end = getcurrenttime();
         timepar = end - start;
         // Affiche la matrice final
-        printf("final\n=====\n");
-        printmatrix(n, m, matrix[np-1]);
+        if (mode == MODE_COMPLET) printf("final\n=====\n");
+        if (mode == MODE_COMPLET) printmatrix(n, m, matrix[0]);
         
-        printf("Temps d'execution sequentiel: %f\n", timeseq);
-        printf("Temps d'execution parallele: %f\n", timeseq);
-        printf("Accélération : %f\n", timeseq/timepar);
-        printf("Efficacité: %f\n", (timeseq/timeseq)/size);
+        if (mode != MODE_PAR) printf("Temps d'execution sequentiel: %f\n", timeseq);
+        printf("Temps d'execution parallele: %f\n", timepar);
+        if (mode != MODE_PAR) printf("Accélération : %f\n", timeseq/timepar);
+        if (mode != MODE_PAR) printf("Efficacité: %f\n", (timeseq/timeseq)/size);
     }
     else
     {
-        double matrix[matrixsize][n][m];
-        zeromatrix(n, m, matrixsize, matrix);
+        double matrix[2][n][m];
+        zeromatrix(n, m, 2, matrix);
         executepar(n, m, np, matrix);
     }
     
@@ -111,9 +125,10 @@ int main(int argc, char* argv[])
     return EXIT_SUCCESS;
 }
 
-void executeseq(int n, int m, int np, double matrix[np][n][m])
+void executeseq(int n, int m, int np, double matrix[2][n][m])
 {
     int i, j, k;
+    int current = 1;
     
     for (k = 1; k <= np; k++)
     {
@@ -121,28 +136,34 @@ void executeseq(int n, int m, int np, double matrix[np][n][m])
         {
             for (j = 1; j < m - 1; j++)
             {
-                matrix[k][i][j] = (1.0 - 4*td / h*h) * matrix[k-1][i][j] + (td/h*h) * (matrix[k-1][i - 1][j] + matrix[k-1][i + 1][j] + matrix[k-1][i][j - 1] + matrix[k-1][i][j + 1]);
+                usleep(5);
+                matrix[current][i][j] = (1.0 - 4*td / h*h) * matrix[1-current][i][j] +
+                    (td/h*h) * (matrix[1-current][i - 1][j] +
+                                matrix[1-current][i + 1][j] +
+                                matrix[1-current][i][j - 1] +
+                                matrix[1-current][i][j + 1]);
             }
         }
+        current = 1 - current;
     }
 }
 
-void executepar(int n, int m, int np, double matrix[np][n][m])
+void executepar(int n, int m, int np, double matrix[2][n][m])
 {
     int i, j, k;
     int workers, tasks, extra, offset, left, right, rows;
     MPI_Status status;
+    workers = size > n ? n : size - 1;
     
     if (id == MASTER)
     {
-        direction = n >= m ? HORIZONTAL : VERTICAL;
-        workers = size - 1;
+        direction = HORIZONTAL;
         tasks   = (direction == HORIZONTAL) ? n / workers : m / workers;
         extra   = (direction == HORIZONTAL) ? n % workers : m % workers;
         offset  = 0;
         
         //Send to workers
-        for(i = 1; i < size; i++)
+        for(i = 1; i <= workers; i++)
         {
             rows = (i <= extra) ? tasks + 1 : tasks;
             left = (i == 1) ? NO_NEIGH : i - 1;
@@ -166,21 +187,21 @@ void executepar(int n, int m, int np, double matrix[np][n][m])
         }
         
         // Receive from workers
-        for (i = 1; i < size; i++)
+        for (i = 1; i <= workers; i++)
         {
             MPI_Recv(&offset, 1, MPI_INT, i, END_TAG, MPI_COMM_WORLD, &status);
             MPI_Recv(&rows, 1, MPI_INT, i, END_TAG, MPI_COMM_WORLD, &status);
             if (direction == HORIZONTAL)
             {
-                MPI_Recv(&matrix[np][offset][0], rows*m, MPI_DOUBLE, i, END_TAG, MPI_COMM_WORLD, &status);
+                MPI_Recv(&matrix[0][offset][0], rows*m, MPI_DOUBLE, i, END_TAG, MPI_COMM_WORLD, &status);
             }
             else
             {
-                MPI_Recv(&matrix[np][0][offset], rows*n, MPI_DOUBLE, i, END_TAG, MPI_COMM_WORLD, &status);
+                MPI_Recv(&matrix[0][0][offset], rows*n, MPI_DOUBLE, i, END_TAG, MPI_COMM_WORLD, &status);
             }
         }
     }
-    else
+    else if (id <= workers)
     {
         int left, right, rows, offset, begin, end;
         
@@ -192,11 +213,11 @@ void executepar(int n, int m, int np, double matrix[np][n][m])
         if (direction == HORIZONTAL)
         {
             MPI_Recv(&matrix[0][offset][0], rows*m, MPI_DOUBLE, MASTER, BEGIN_TAG, MPI_COMM_WORLD, &status);
-        } else
+        }
+        else
         {
             MPI_Recv(&matrix[0][0][offset], rows*n, MPI_DOUBLE, MASTER, BEGIN_TAG, MPI_COMM_WORLD, &status);
         }
-        
         
         
         begin = offset;
@@ -211,6 +232,7 @@ void executepar(int n, int m, int np, double matrix[np][n][m])
         }
     
         int jend = (direction == HORIZONTAL) ? m : n;
+        int current = 0;
         
         for (k = 1; k <= np ; k++)
         {
@@ -219,22 +241,27 @@ void executepar(int n, int m, int np, double matrix[np][n][m])
                 // Left neighbor
                 if (left != NO_NEIGH)
                 {
-                    MPI_Send(&matrix[k-1][offset][0], m, MPI_DOUBLE, left, TRANSMIT_LEFT_TAG, MPI_COMM_WORLD);
-                    MPI_Recv(&matrix[k-1][offset - 1][0], m, MPI_DOUBLE, left, TRANSMIT_RIGHT_TAG, MPI_COMM_WORLD, &status);
+                    MPI_Send(&matrix[current][offset][0], m, MPI_DOUBLE, left, TRANSMIT_LEFT_TAG, MPI_COMM_WORLD);
+                    MPI_Recv(&matrix[current][offset - 1][0], m, MPI_DOUBLE, left, TRANSMIT_RIGHT_TAG, MPI_COMM_WORLD, &status);
                 }
                 
                 // Right neighbor
                 if (right != NO_NEIGH)
                 {
-                    MPI_Send(&matrix[k-1][offset + rows - 1][0], m, MPI_DOUBLE, right, TRANSMIT_RIGHT_TAG, MPI_COMM_WORLD);
-                    MPI_Recv(&matrix[k-1][offset + rows][0], m, MPI_DOUBLE, right, TRANSMIT_LEFT_TAG, MPI_COMM_WORLD, &status);
+                    MPI_Send(&matrix[current][offset + rows - 1][0], m, MPI_DOUBLE, right, TRANSMIT_RIGHT_TAG, MPI_COMM_WORLD);
+                    MPI_Recv(&matrix[current][offset + rows][0], m, MPI_DOUBLE, right, TRANSMIT_LEFT_TAG, MPI_COMM_WORLD, &status);
                 }
                 
                 for (i = begin; i <= end; i++)
                 {
                     for (j = 1; j < jend - 1; j++)
                     {
-                        matrix[k][i][j] = (1.0 - 4*td / h*h) * matrix[k-1][i][j] + (td/h*h) * (matrix[k-1][i - 1][j] + matrix[k-1][i + 1][j] + matrix[k-1][i][j - 1] + matrix[k-1][i][j + 1]);
+                        usleep(5);
+                        matrix[1-current][i][j] = (1.0 - 4*td / h*h) * matrix[current][i][j] +
+                            (td/h*h) * (matrix[current][i - 1][j] +
+                                        matrix[current][i + 1][j] +
+                                        matrix[current][i][j - 1] +
+                                        matrix[current][i][j + 1]);
                     }
                 }
             }
@@ -243,25 +270,31 @@ void executepar(int n, int m, int np, double matrix[np][n][m])
                 // Left neighbor
                 if (left != NO_NEIGH)
                 {
-                    MPI_Send(&matrix[k-1][0][offset], n, MPI_DOUBLE, left, TRANSMIT_LEFT_TAG, MPI_COMM_WORLD);
-                    MPI_Recv(&matrix[k-1][0][offset - 1], n, MPI_DOUBLE, left, TRANSMIT_RIGHT_TAG, MPI_COMM_WORLD, &status);
+                    MPI_Send(&matrix[current][0][offset], n, MPI_DOUBLE, left, TRANSMIT_LEFT_TAG, MPI_COMM_WORLD);
+                    MPI_Recv(&matrix[current][0][offset - 1], n, MPI_DOUBLE, left, TRANSMIT_RIGHT_TAG, MPI_COMM_WORLD, &status);
                 }
                 
                 // Right neighbor
                 if (right != NO_NEIGH)
                 {
-                    MPI_Send(&matrix[k-1][0][offset + rows - 1], n, MPI_DOUBLE, right, TRANSMIT_RIGHT_TAG, MPI_COMM_WORLD);
-                    MPI_Recv(&matrix[k-1][0][offset + rows], n, MPI_DOUBLE, right, TRANSMIT_LEFT_TAG, MPI_COMM_WORLD, &status);
+                    MPI_Send(&matrix[current][0][offset + rows - 1], n, MPI_DOUBLE, right, TRANSMIT_RIGHT_TAG, MPI_COMM_WORLD);
+                    MPI_Recv(&matrix[current][0][offset + rows], n, MPI_DOUBLE, right, TRANSMIT_LEFT_TAG, MPI_COMM_WORLD, &status);
                 }
                 
-                for (i = 1; i < jend - 1; i++)
+                for (i = begin; i <= end; i++)
                 {
-                    for (j = begin; j <= end - 1; j++)
+                    for (j = 1; j < jend - 1; j++)
                     {
-                        matrix[k][i][j] = (1.0 - 4*td / h*h) * matrix[k-1][i][j] + (td/h*h) * (matrix[k-1][i - 1][j] + matrix[k-1][i + 1][j] + matrix[k-1][i][j - 1] + matrix[k-1][i][j + 1]);
+                        usleep(5);
+                        matrix[1-current][j][i] = (1.0 - 4*td / h*h) * matrix[current][j][i] +
+                        (td/h*h) * (matrix[current][j - 1][i] +
+                                    matrix[current][j + 1][i] +
+                                    matrix[current][j][i - 1] +
+                                    matrix[current][j][i + 1]);
                     }
                 }
             }
+            current = 1 - current;
         }
         
         MPI_Send(&offset, 1, MPI_INT, MASTER, END_TAG, MPI_COMM_WORLD);
@@ -269,11 +302,11 @@ void executepar(int n, int m, int np, double matrix[np][n][m])
         
         if (direction == HORIZONTAL)
         {
-            MPI_Send(&matrix[np][offset][0], rows*m, MPI_DOUBLE, MASTER, END_TAG, MPI_COMM_WORLD);
+            MPI_Send(&matrix[current][offset][0], rows*m, MPI_DOUBLE, MASTER, END_TAG, MPI_COMM_WORLD);
         }
         else
         {
-            MPI_Send(&matrix[np][0][offset], rows*n, MPI_DOUBLE, MASTER, END_TAG, MPI_COMM_WORLD);
+            MPI_Send(&matrix[current][0][offset], rows*n, MPI_DOUBLE, MASTER, END_TAG, MPI_COMM_WORLD);
         }
     }
 }
