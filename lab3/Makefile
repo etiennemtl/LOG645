@@ -1,25 +1,18 @@
-PROG = lab3
-CFLAGS = -g -fPIC -m64 -Wall -std=c99
-LFLAGS= -fPIC -m64 -Wall
-CC = mpicc
+CFLAGS=-g -fPIC -m64 -Wall
+LFLAGS=-fPIC -m64 -Wall
+MPICC=mpicc
 
-all: $(PROG)
+all: lab3
 
-lab3: lab3.o seq.o par.o
-	$(CC) $(LFLAGS) lab3.o seq.o par.o -o lab3
+lab3.o: lab3.c
+	$(MPICC) $(CFLAGS) -c lab3.c -o $@
 
-lab3.o: lab3.c seq.h par.h
-	$(CC) $(CFLAGS) -c lab3.c
+lab3: lab3.o
+	$(MPICC) $(LFLAGS) lab3.o -o lab3
 
-seq.o: seq.c seq.h
-	$(CC) $(CFLAGS) -c seq.c
-
-par.o: par.c par.h
-	$(CC) $(CFLAGS) -c par.c
-
-run:
-	mpirun -np $6 lab3
+ps:
+	ps -fu $$USER
 
 clean:
-	/bin/rm -f *~
-	/bin/rm -f *.o
+	rm lab3
+	rm lab3.o
