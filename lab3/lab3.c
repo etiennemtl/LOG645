@@ -13,9 +13,11 @@
 #define TRANSMIT_LEFT_TAG 101
 #define TRANSMIT_RIGHT_TAG 102
 #define END_TAG 103
+#define VERTICAL 0
+#define HORIZONTAL 1
 
 // Global variables
-int size, id, n, m, np, procs, matrixsize;
+int size, id, n, m, np, procs, matrixsize, direction;
 double td, h;
 
 // Functions declarations
@@ -133,16 +135,11 @@ void executepar(int n, int m, int np, double matrix[np][n][m])
     
     if (id == MASTER)
     {
-//        int ishorizontal = n >= m ? 1 : 0;
+        direction = n >= m ? HORIZONTAL : VERTICAL;
         workers = size - 1;
-        tasks   = n / workers;
-        extra   = n % workers;
+        tasks   = (direction == HORIZONTAL) ? n / workers : m / workers;
+        extra   = (direction == HORIZONTAL) ? n % workers : m % workers;
         offset  = 0;
-        
-//        int tasknumber = ishorizontal == 1 ? n : m;
-        
-//        int numrows = tasknumber/(size-1);
-//        int numrowsextra = tasknumber%(size-1);
         
         //Send to workers
         for(i = 1; i < size; i++)
@@ -155,13 +152,15 @@ void executepar(int n, int m, int np, double matrix[np][n][m])
             MPI_Send(&offset, 1, MPI_INT, i, BEGIN_TAG, MPI_COMM_WORLD);
             MPI_Send(&left, 1, MPI_INT, i, BEGIN_TAG, MPI_COMM_WORLD);
             MPI_Send(&right, 1, MPI_INT, i, BEGIN_TAG, MPI_COMM_WORLD);
-//            MPI_Send(&ishorizontal, 1, MPI_INT, i, BEGIN, MPI_COMM_WORLD);
-            MPI_Send(&matrix[0][offset][0], rows*m, MPI_DOUBLE, i, BEGIN_TAG, MPI_COMM_WORLD);
-//            if (ishorizontal == 1) {
-//                MPI_Send(&matrix[0][offset][0], rows*m, MPI_DOUBLE, i, BEGIN, MPI_COMM_WORLD);
-//            } else {
-//                MPI_Send(&matrix[0][0][offset], rows*n, MPI_DOUBLE, i, BEGIN, MPI_COMM_WORLD);
-//            }
+            MPI_Send(&direction, 1, MPI_INT, i, BEGIN_TAG, MPI_COMM_WORLD);
+            if (direction == HORIZONTAL)
+            {
+                MPI_Send(&matrix[0][offset][0], rows*m, MPI_DOUBLE, i, BEGIN_TAG, MPI_COMM_WORLD);
+            }
+            else
+            {
+                MPI_Send(&matrix[0][0][offset], rows*n, MPI_DOUBLE, i, BEGIN_TAG, MPI_COMM_WORLD);
+            }
             
             offset = offset + rows;
         }
@@ -171,106 +170,111 @@ void executepar(int n, int m, int np, double matrix[np][n][m])
         {
             MPI_Recv(&offset, 1, MPI_INT, i, END_TAG, MPI_COMM_WORLD, &status);
             MPI_Recv(&rows, 1, MPI_INT, i, END_TAG, MPI_COMM_WORLD, &status);
-            MPI_Recv(&matrix[np][offset][0], rows*m, MPI_DOUBLE, i, END_TAG, MPI_COMM_WORLD, &status);
-//            if (ishorizontal == 1) {
-//                MPI_Recv(&matrix[np][offset][0], rows*m, MPI_DOUBLE, i, END, MPI_COMM_WORLD, &status);
-//            } else {
-//                MPI_Recv(&matrix[np][0][offset], rows*n, MPI_DOUBLE, i, END, MPI_COMM_WORLD, &status);
-//            }
+            if (direction == HORIZONTAL)
+            {
+                MPI_Recv(&matrix[np][offset][0], rows*m, MPI_DOUBLE, i, END_TAG, MPI_COMM_WORLD, &status);
+            }
+            else
+            {
+                MPI_Recv(&matrix[np][0][offset], rows*n, MPI_DOUBLE, i, END_TAG, MPI_COMM_WORLD, &status);
+            }
         }
     }
     else
     {
         int left, right, rows, offset, begin, end;
-//        int ishorizontal;
         
         MPI_Recv(&rows, 1, MPI_INT, MASTER, BEGIN_TAG, MPI_COMM_WORLD, &status);
         MPI_Recv(&offset, 1, MPI_INT, MASTER, BEGIN_TAG, MPI_COMM_WORLD, &status);
         MPI_Recv(&left, 1, MPI_INT, MASTER, BEGIN_TAG, MPI_COMM_WORLD, &status);
         MPI_Recv(&right, 1, MPI_INT, MASTER, BEGIN_TAG, MPI_COMM_WORLD, &status);
-        MPI_Recv(&matrix[0][offset][0], rows*m, MPI_DOUBLE, MASTER, BEGIN_TAG, MPI_COMM_WORLD, &status);
-//        MPI_Recv(&ishorizontal, 1, MPI_INT, MASTER, BEGIN_TAG, MPI_COMM_WORLD, &status);
+        MPI_Recv(&direction, 1, MPI_INT, MASTER, BEGIN_TAG, MPI_COMM_WORLD, &status);
+        if (direction == HORIZONTAL)
+        {
+            MPI_Recv(&matrix[0][offset][0], rows*m, MPI_DOUBLE, MASTER, BEGIN_TAG, MPI_COMM_WORLD, &status);
+        } else
+        {
+            MPI_Recv(&matrix[0][0][offset], rows*n, MPI_DOUBLE, MASTER, BEGIN_TAG, MPI_COMM_WORLD, &status);
+        }
+        
+        
         
         begin = offset;
         end = offset + rows - 1;
-        if (offset == 0) {
+        if (offset == 0)
+        {
             begin = 1;
         }
-        if (offset + rows == m) {
+        if ((direction == HORIZONTAL && offset + rows == n) || (direction == VERTICAL && offset + rows == m))
+        {
             end--;
         }
-//        if (ishorizontal == 1 ? (offset+rows == n) : (offset+rows == m)) {
-//            end--;
-//        }
     
-//        int jiterator = ishorizontal == 1 ? m : n;
+        int jend = (direction == HORIZONTAL) ? m : n;
         
         for (k = 1; k <= np ; k++)
         {
-            // Left neighbor
-            if (left != NO_NEIGH)
+            if (direction == HORIZONTAL)
             {
-                MPI_Send(&matrix[k-1][offset][0], m, MPI_DOUBLE, left, TRANSMIT_RIGHT_TAG, MPI_COMM_WORLD);
-                MPI_Recv(&matrix[k-1][offset - 1][0], m, MPI_DOUBLE, left, TRANSMIT_LEFT_TAG, MPI_COMM_WORLD, &status);
-            }
-            
-            // Right neighbor
-            if (right != NO_NEIGH)
-            {
-                MPI_Send(&matrix[k-1][offset + rows - 1][0], m, MPI_DOUBLE, right, TRANSMIT_LEFT_TAG, MPI_COMM_WORLD);
-                MPI_Recv(&matrix[k-1][offset + rows][0], m, MPI_DOUBLE, right, TRANSMIT_RIGHT_TAG, MPI_COMM_WORLD, &status);
-            }
-            
-            for (i = begin; i <= end; i++)
-            {
-                for (j = 1; j < m - 1; j++)
+                // Left neighbor
+                if (left != NO_NEIGH)
                 {
-                    matrix[k][i][j] = (1.0 - 4*td / h*h) * matrix[k-1][i][j] + (td/h*h) * (matrix[k-1][i - 1][j] + matrix[k-1][i + 1][j] + matrix[k-1][i][j - 1] + matrix[k-1][i][j + 1]);
+                    MPI_Send(&matrix[k-1][offset][0], m, MPI_DOUBLE, left, TRANSMIT_LEFT_TAG, MPI_COMM_WORLD);
+                    MPI_Recv(&matrix[k-1][offset - 1][0], m, MPI_DOUBLE, left, TRANSMIT_RIGHT_TAG, MPI_COMM_WORLD, &status);
+                }
+                
+                // Right neighbor
+                if (right != NO_NEIGH)
+                {
+                    MPI_Send(&matrix[k-1][offset + rows - 1][0], m, MPI_DOUBLE, right, TRANSMIT_RIGHT_TAG, MPI_COMM_WORLD);
+                    MPI_Recv(&matrix[k-1][offset + rows][0], m, MPI_DOUBLE, right, TRANSMIT_LEFT_TAG, MPI_COMM_WORLD, &status);
+                }
+                
+                for (i = begin; i <= end; i++)
+                {
+                    for (j = 1; j < jend - 1; j++)
+                    {
+                        matrix[k][i][j] = (1.0 - 4*td / h*h) * matrix[k-1][i][j] + (td/h*h) * (matrix[k-1][i - 1][j] + matrix[k-1][i + 1][j] + matrix[k-1][i][j - 1] + matrix[k-1][i][j + 1]);
+                    }
                 }
             }
-            
-//            if (left != NO_NEIGH) {
-//                if (ishorizontal == 1) {
-//                    MPI_Send(&matrix[k-1][offset][0], m, MPI_DOUBLE, left, TRANSMIT_LEFT, MPI_COMM_WORLD);
-//                    MPI_Recv(&matrix[k-1][offset-1][0], m, MPI_DOUBLE, left, TRANSMIT_RIGHT, MPI_COMM_WORLD, &status);
-//                } else {
-//                    MPI_Send(&matrix[k-1][0][offset], n, MPI_DOUBLE, left, TRANSMIT_LEFT, MPI_COMM_WORLD);
-//                    MPI_Recv(&matrix[k-1][0][offset-1], n, MPI_DOUBLE, left, TRANSMIT_RIGHT, MPI_COMM_WORLD, &status);
-//                }
-//            }
-//            if (right != NO_NEIGH) {
-//                if (ishorizontal == 1) {
-//                    MPI_Send(&matrix[k-1][offset+rows-1][0], m, MPI_DOUBLE, right, TRANSMIT_RIGHT, MPI_COMM_WORLD);
-//                    MPI_Recv(&matrix[k-1][offset+rows][0], m, MPI_DOUBLE, right, TRANSMIT_LEFT, MPI_COMM_WORLD, &status);
-//                } else {
-//                    MPI_Send(&matrix[k-1][0][offset+rows-1], n, MPI_DOUBLE, right, TRANSMIT_RIGHT, MPI_COMM_WORLD);
-//                    MPI_Recv(&matrix[k-1][0][offset+rows], n, MPI_DOUBLE, right, TRANSMIT_LEFT, MPI_COMM_WORLD, &status);
-//                }
-//            }
-            
-//            if (ishorizontal == 1) {
-//                for (i = begin; i <= end; i++) {
-//                    for (j = 1; j <= jiterator - 2; j++) {
-//                        matrix[k][i][j] = (1.0 - 4*td / h*h) * matrix[k-1][i][j] + (td/h*h) * (matrix[k-1][i - 1][j] + matrix[k-1][i + 1][j] + matrix[k-1][i][j - 1] + matrix[k-1][i][j + 1]);
-//                    }
-//                }
-//            } else {
-//                for (i = 1; i < jiterator - 1; i++) {
-//                    for (j = begin; j <= end - 1; j++) {
-//                        matrix[k][i][j] = (1.0 - 4*td / h*h) * matrix[k-1][i][j] + (td/h*h) * (matrix[k-1][i - 1][j] + matrix[k-1][i + 1][j] + matrix[k-1][i][j - 1] + matrix[k-1][i][j + 1]);
-//                    }
-//                }
-//            }
+            else
+            {
+                // Left neighbor
+                if (left != NO_NEIGH)
+                {
+                    MPI_Send(&matrix[k-1][0][offset], n, MPI_DOUBLE, left, TRANSMIT_LEFT_TAG, MPI_COMM_WORLD);
+                    MPI_Recv(&matrix[k-1][0][offset - 1], n, MPI_DOUBLE, left, TRANSMIT_RIGHT_TAG, MPI_COMM_WORLD, &status);
+                }
+                
+                // Right neighbor
+                if (right != NO_NEIGH)
+                {
+                    MPI_Send(&matrix[k-1][0][offset + rows - 1], n, MPI_DOUBLE, right, TRANSMIT_RIGHT_TAG, MPI_COMM_WORLD);
+                    MPI_Recv(&matrix[k-1][0][offset + rows], n, MPI_DOUBLE, right, TRANSMIT_LEFT_TAG, MPI_COMM_WORLD, &status);
+                }
+                
+                for (i = 1; i < jend - 1; i++)
+                {
+                    for (j = begin; j <= end - 1; j++)
+                    {
+                        matrix[k][i][j] = (1.0 - 4*td / h*h) * matrix[k-1][i][j] + (td/h*h) * (matrix[k-1][i - 1][j] + matrix[k-1][i + 1][j] + matrix[k-1][i][j - 1] + matrix[k-1][i][j + 1]);
+                    }
+                }
+            }
         }
         
         MPI_Send(&offset, 1, MPI_INT, MASTER, END_TAG, MPI_COMM_WORLD);
         MPI_Send(&rows, 1, MPI_INT, MASTER, END_TAG, MPI_COMM_WORLD);
-        MPI_Send(&matrix[np][offset][0], rows*m, MPI_DOUBLE, MASTER, END_TAG, MPI_COMM_WORLD);
-//        if (ishorizontal == 1) {
-//            MPI_Send(&matrix[np][offset][0], rows*m, MPI_DOUBLE, MASTER, END, MPI_COMM_WORLD);
-//        } else {
-//            MPI_Send(&matrix[np][0][offset], rows*n, MPI_DOUBLE, MASTER, END, MPI_COMM_WORLD);
-//        }
+        
+        if (direction == HORIZONTAL)
+        {
+            MPI_Send(&matrix[np][offset][0], rows*m, MPI_DOUBLE, MASTER, END_TAG, MPI_COMM_WORLD);
+        }
+        else
+        {
+            MPI_Send(&matrix[np][0][offset], rows*n, MPI_DOUBLE, MASTER, END_TAG, MPI_COMM_WORLD);
+        }
     }
 }
 
