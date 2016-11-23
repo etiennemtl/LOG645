@@ -8,11 +8,13 @@
 #include <string.h>
 #include <cstdio>
 #include <CL\cl.h>
+#include <vector>
 
 char* oclLoadProgSource(const char* cFilename, const char* cPreamble, size_t* szFinalLength);
 
 int main(int argc, char* argv[])
 {
+	typedef std::vector< std::vector<double> > matrix;
 	int m, n, np, i, j, k;
 	double td, h;
 	if (argc == 6)
@@ -29,27 +31,13 @@ int main(int argc, char* argv[])
 		return EXIT_FAILURE;
 	}
 
-	double*** matrix = (double ***)malloc(2 * sizeof(double**));
-	for (k = 0; k < 2; k++) {
-		matrix[k] = (double **)malloc(n * sizeof(double*));
-		for (i = 0; i < n; i++) {
-			matrix[k][i] = (double *)malloc(m * sizeof(double));
-		}
-	}
-
-	for (k = 0; k < 2; k++) {
-		for (i = 0; i < n; i++) {
-			for (j = 0; j < m; j++) {
-				matrix[k][i][j] = 0.0;
-			}
-		}
-	}
+	matrix seqmatrix[2] = { matrix(n, std::vector<double>(m)), matrix(n, std::vector<double>(m)) };
 
 	for (i = 0; i < n; i++)
 	{
 		for (j = 0; j < m; j++)
 		{
-			matrix[0][i][j] = i * j * (n - i - 1) * (m - j - 1);
+			seqmatrix[0][i][j] = i * j * (n - i - 1) * (m - j - 1);
 		}
 	}
 
@@ -61,11 +49,11 @@ int main(int argc, char* argv[])
 		{
 			for (j = 1; j < m - 1; j++)
 			{
-				matrix[current][i][j] = (1.0 - 4 * td / h*h) * matrix[1 - current][i][j] +
-					(td / h*h) * (matrix[1 - current][i - 1][j] +
-						matrix[1 - current][i + 1][j] +
-						matrix[1 - current][i][j - 1] +
-						matrix[1 - current][i][j + 1]);
+				seqmatrix[current][i][j] = (1.0 - 4 * td / h*h) * seqmatrix[1 - current][i][j] +
+					(td / h*h) * (seqmatrix[1 - current][i - 1][j] +
+						seqmatrix[1 - current][i + 1][j] +
+						seqmatrix[1 - current][i][j - 1] +
+						seqmatrix[1 - current][i][j + 1]);
 			}
 		}
 		current = 1 - current;
@@ -75,7 +63,7 @@ int main(int argc, char* argv[])
 	{
 		for (j = 0; j < m; j++)
 		{
-			printf("%5.2f\t", matrix[1 - current][i][j]);
+			printf("%5.2f\t", seqmatrix[1 - current][i][j]);
 		}
 		printf("\n");
 	}
@@ -83,14 +71,18 @@ int main(int argc, char* argv[])
 	/**********************************************************************
 	 *							PARA									  *
 	 **********************************************************************/
+	
+	double *initialmatrix = (double *)malloc(n*m*sizeof(double));
+	double *finalmatrix = (double *)malloc(n*m*sizeof(double));
 
 	cl_platform_id platform_id = NULL;
 	cl_device_id device_id = NULL;
 	cl_context context = NULL;
 	cl_command_queue command_queue = NULL;
-	cl_mem Matrixmobj = NULL;
+	cl_mem Initialmatrixmobj = NULL;
+	cl_mem Finalmatrixmobj = NULL;
 	cl_program program = NULL;
-	cl_kernel kernel[1] = { NULL };
+	cl_kernel kernel = NULL;
 	cl_uint ret_num_devices;
 	cl_uint ret_num_platforms;
 	cl_int ret;
@@ -108,35 +100,41 @@ int main(int argc, char* argv[])
 	/* Create command queue */
 	command_queue = clCreateCommandQueue(context, device_id, CL_QUEUE_OUT_OF_ORDER_EXEC_MODE_ENABLE, &ret);
 
-	Matrixmobj = clCreateBuffer(context, CL_MEM_READ_WRITE, 2 * n * m * sizeof(double), NULL, &ret);
+	Initialmatrixmobj = clCreateBuffer(context, CL_MEM_READ_WRITE, n * m * sizeof(double), NULL, &ret);
+	Finalmatrixmobj = clCreateBuffer(context, CL_MEM_READ_WRITE, n * m * sizeof(double), NULL, &ret);
 
 	/* Create kernel from source */
 	program = clCreateProgramWithSource(context, 1, (const char **)&strkernel, (const size_t *)&szFinalLength, &ret);
 	ret = clBuildProgram(program, 1, &device_id, NULL, NULL, NULL);
 
 	/* Create task parallel OpenCL kernel */
-	kernel[0] = clCreateKernel(program, "HeatTransfer", &ret);
+	kernel = clCreateKernel(program, "HeatTransfer", &ret);
 
 	/* Set OpenCL kernel arguments */
-	for (i = 0; i < 1; i++) {
-		ret = clSetKernelArg(kernel[i], 0, sizeof(cl_mem), (void *)&Matrixmobj);
-	}
+	ret = clSetKernelArg(kernel, 0, sizeof(cl_mem), (void *)&Initialmatrixmobj);
+	ret = clSetKernelArg(kernel, 1, sizeof(cl_mem), (void *)&Finalmatrixmobj);
+	ret = clSetKernelArg(kernel, 2, sizeof(int), (void *)&n);
+	ret = clSetKernelArg(kernel, 3, sizeof(int), (void *)&m);
+	ret = clSetKernelArg(kernel, 4, sizeof(int), (void *)&np);
+	ret = clSetKernelArg(kernel, 5, sizeof(double), (void *)&td);
+	ret = clSetKernelArg(kernel, 6, sizeof(double), (void *)&h);
 
 	/* Copy input data to memory buffer */
-	ret = clEnqueueWriteBuffer(command_queue, Matrixmobj, CL_TRUE, 0, 2 * n * m * sizeof(double), matrix, 0, NULL, NULL);
+	ret = clEnqueueWriteBuffer(command_queue, Initialmatrixmobj, CL_TRUE, 0, n * m * sizeof(double), initialmatrix, 0, NULL, NULL);
+
+	size_t global_item_size = 2;
+	size_t local_item_size = 1;
 
 	/* Execute OpenCL kernel as task parallel */
-	for (i = 0; i < 1; i++) {
-		ret = clEnqueueTask(command_queue, kernel[i], 0, NULL, NULL);
-	}
+	ret = clEnqueueNDRangeKernel(command_queue, kernel, 1, NULL, &global_item_size, &local_item_size, 0, NULL, NULL);
 
 	/* Copy result to host */
-	ret = clEnqueueReadBuffer(command_queue, Matrixmobj, CL_TRUE, 0, 2 * n * m * sizeof(double), matrix, 0, NULL, NULL);
+	ret = clEnqueueReadBuffer(command_queue, Finalmatrixmobj, CL_TRUE, 0, n * m * sizeof(double), finalmatrix, 0, NULL, NULL);
 
 	/* Display result */
 	for (i = 0; i < n; i++) {
 		for (j = 0; j < m; j++) {
-			printf("%5.2f\t", matrix[np%2][i][j]);
+			printf("%5.2f\t", finalmatrix[i*j]);
 		}
 		printf("\n");
 	}
@@ -144,9 +142,10 @@ int main(int argc, char* argv[])
 	/* Finalization */
 	ret = clFlush(command_queue);
 	ret = clFinish(command_queue);
-	ret = clReleaseKernel(kernel[0]);
+	ret = clReleaseKernel(kernel);
 	ret = clReleaseProgram(program);
-	ret = clReleaseMemObject(Matrixmobj);
+	ret = clReleaseMemObject(Initialmatrixmobj);
+	ret = clReleaseMemObject(Finalmatrixmobj);
 	ret = clReleaseCommandQueue(command_queue);
 	ret = clReleaseContext(context);
 
