@@ -49,8 +49,8 @@ int main(int argc, char* argv[])
 		{
 			for (j = 1; j < m - 1; j++)
 			{
-				seqmatrix[current][i][j] = (1.0 - 4 * td / h*h) * seqmatrix[1 - current][i][j] +
-					(td / h*h) * (seqmatrix[1 - current][i - 1][j] +
+				seqmatrix[current][i][j] = (1.0 - (4 * td) / (h*h)) * seqmatrix[1 - current][i][j] +
+					(td / (h*h)) * (seqmatrix[1 - current][i - 1][j] +
 						seqmatrix[1 - current][i + 1][j] +
 						seqmatrix[1 - current][i][j - 1] +
 						seqmatrix[1 - current][i][j + 1]);
@@ -132,25 +132,22 @@ int main(int argc, char* argv[])
 
 	size_t global_item_size = n*m;
 
-	//for (i = 0; i <= np; i++)
-	//{		
-	//	/* Execute OpenCL kernel as task parallel */
-	//	ret = clEnqueueNDRangeKernel(command_queue, kernel, 1, NULL, &global_item_size, NULL, 0, NULL, NULL);
+	for (i = 1; i <= np; i++)
+	{
+		/* Execute OpenCL kernel as task parallel */
+		ret = clEnqueueNDRangeKernel(command_queue, kernel, 1, NULL, &global_item_size, NULL, 0, NULL, NULL);
 
-	//	/* Copy result to host */
-	//	ret = clEnqueueReadBuffer(command_queue, Finalmatrixmobj, CL_TRUE, 0, n * m * sizeof(double), finalmatrix, 0, NULL, NULL);
-	//}
-
-	/* Execute OpenCL kernel as task parallel */
-	ret = clEnqueueNDRangeKernel(command_queue, kernel, 1, NULL, &global_item_size, NULL, 0, NULL, NULL);
-
-	/* Copy result to host */
-	ret = clEnqueueReadBuffer(command_queue, Finalmatrixmobj, CL_TRUE, 0, n * m * sizeof(double), finalmatrix, 0, NULL, NULL);
+		/* Copy result to host */
+		ret = clEnqueueReadBuffer(command_queue, Finalmatrixmobj, CL_TRUE, 0, n * m * sizeof(double), finalmatrix, 0, NULL, NULL);
+		ret = clEnqueueWriteBuffer(command_queue, Initialmatrixmobj, CL_TRUE, 0, n * m * sizeof(double), finalmatrix, 0, NULL, NULL);
+	}
 
 	/* Display result */
 	printf("matrice finale\n");
-	for (i = 0; i < n; i++) {
-		for (j = 0; j < m; j++) {
+	for (i = 0; i < n; i++) 
+	{
+		for (j = 0; j < m; j++) 
+		{
 			printf("%5.2f\t", finalmatrix[i*m+j]);
 		}
 		printf("\n");

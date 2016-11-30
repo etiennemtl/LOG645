@@ -1,22 +1,10 @@
 __kernel void HeatTransfer(__global double *intialmatrix, __global double *finalmatrix, int n, int m, int np, double td, double h)
 {
 	int id = get_global_id(0);
-	int i, j;
-	if (id == 0)
-	{
-		printf("matrice initiale\n");
-		for (i = 0; i < n; i++) {
-			for (j = 0; j < m; j++) {
-				printf("%5.2f\t", intialmatrix[i*m+j]);
-			}
-			printf("\n");
-		}
-	}
+	int i = (int)(id / m);
+	int j = (id%m);
 
-	i = (int)(id / n);
-	j = (id%n);
-
-	if (i == 0 || i == m-1 || j == 0 || j == n-1) 
+	if (i == 0 || i == n-1 || j == 0 || j == m-1) 
 	{
 		finalmatrix[i*m+j] = 0.00;
 	}
