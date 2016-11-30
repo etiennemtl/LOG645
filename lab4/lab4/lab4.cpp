@@ -158,7 +158,7 @@ int main(int argc, char* argv[])
 		ret = clEnqueueWriteBuffer(command_queue, Initialmatrixmobj, CL_TRUE, 0, n * m * sizeof(double), finalmatrix, 0, NULL, NULL);
 	}
 
-	durationpar = (std::clock() - startseq) / (double)CLOCKS_PER_SEC;
+	durationpar = (std::clock() - startpar) / (double)CLOCKS_PER_SEC;
 
 	/* Display result */
 	printf("Matrice parallele\n");
