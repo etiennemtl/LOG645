@@ -9,6 +9,8 @@
 #include <cstdio>
 #include <CL\cl.h>
 #include <vector>
+#include <ctime>
+#include <iostream>
 
 char* oclLoadProgSource(const char* cFilename, const char* cPreamble, size_t* szFinalLength);
 
@@ -32,6 +34,11 @@ int main(int argc, char* argv[])
 	}
 
 	matrix seqmatrix[2] = { matrix(n, std::vector<double>(m)), matrix(n, std::vector<double>(m)) };
+
+	std::clock_t startseq;
+	double durationseq;
+
+	startseq = std::clock();
 
 	for (i = 0; i < n; i++)
 	{
@@ -59,6 +66,10 @@ int main(int argc, char* argv[])
 		current = 1 - current;
 	}
 
+	durationseq = (std::clock() - startseq) / (double)CLOCKS_PER_SEC;
+
+	printf("Matrice sequentielle\n");
+	printf("--------------------------------------------\n");
 	for (i = 0; i < n; i++)
 	{
 		for (j = 0; j < m; j++)
@@ -132,6 +143,11 @@ int main(int argc, char* argv[])
 
 	size_t global_item_size = n*m;
 
+	std::clock_t startpar;
+	double durationpar;
+
+	startpar = std::clock();
+
 	for (i = 1; i <= np; i++)
 	{
 		/* Execute OpenCL kernel as task parallel */
@@ -142,8 +158,11 @@ int main(int argc, char* argv[])
 		ret = clEnqueueWriteBuffer(command_queue, Initialmatrixmobj, CL_TRUE, 0, n * m * sizeof(double), finalmatrix, 0, NULL, NULL);
 	}
 
+	durationpar = (std::clock() - startseq) / (double)CLOCKS_PER_SEC;
+
 	/* Display result */
-	printf("matrice finale\n");
+	printf("Matrice parallele\n");
+	printf("--------------------------------------------\n");
 	for (i = 0; i < n; i++) 
 	{
 		for (j = 0; j < m; j++) 
@@ -152,6 +171,10 @@ int main(int argc, char* argv[])
 		}
 		printf("\n");
 	}
+	printf("\n");
+	printf("Temps d'execution sequentiel: %f\n", durationseq);
+	printf("Temps d'execution parallele: %f\n", durationpar);
+	printf("Acceleration : %f\n", durationseq / durationpar);
 
 	/* Finalization */
 	ret = clFlush(command_queue);
