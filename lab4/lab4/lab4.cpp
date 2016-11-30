@@ -75,6 +75,14 @@ int main(int argc, char* argv[])
 	double *initialmatrix = (double *)malloc(n*m*sizeof(double));
 	double *finalmatrix = (double *)malloc(n*m*sizeof(double));
 
+	for (i = 0; i < n; i++)
+	{
+		for (j = 0; j < m; j++)
+		{
+			initialmatrix[i*m+j] = i * j * (n - i - 1) * (m - j - 1);
+		}
+	}
+
 	cl_platform_id platform_id = NULL;
 	cl_device_id device_id = NULL;
 	cl_context context = NULL;
@@ -110,6 +118,9 @@ int main(int argc, char* argv[])
 	/* Create task parallel OpenCL kernel */
 	kernel = clCreateKernel(program, "HeatTransfer", &ret);
 
+	/* Copy input data to memory buffer */
+	ret = clEnqueueWriteBuffer(command_queue, Initialmatrixmobj, CL_TRUE, 0, n * m * sizeof(double), initialmatrix, 0, NULL, NULL);
+
 	/* Set OpenCL kernel arguments */
 	ret = clSetKernelArg(kernel, 0, sizeof(cl_mem), (void *)&Initialmatrixmobj);
 	ret = clSetKernelArg(kernel, 1, sizeof(cl_mem), (void *)&Finalmatrixmobj);
@@ -119,22 +130,28 @@ int main(int argc, char* argv[])
 	ret = clSetKernelArg(kernel, 5, sizeof(double), (void *)&td);
 	ret = clSetKernelArg(kernel, 6, sizeof(double), (void *)&h);
 
-	/* Copy input data to memory buffer */
-	ret = clEnqueueWriteBuffer(command_queue, Initialmatrixmobj, CL_TRUE, 0, n * m * sizeof(double), initialmatrix, 0, NULL, NULL);
+	size_t global_item_size = n*m;
 
-	size_t global_item_size = 2;
-	size_t local_item_size = 1;
+	//for (i = 0; i <= np; i++)
+	//{		
+	//	/* Execute OpenCL kernel as task parallel */
+	//	ret = clEnqueueNDRangeKernel(command_queue, kernel, 1, NULL, &global_item_size, NULL, 0, NULL, NULL);
+
+	//	/* Copy result to host */
+	//	ret = clEnqueueReadBuffer(command_queue, Finalmatrixmobj, CL_TRUE, 0, n * m * sizeof(double), finalmatrix, 0, NULL, NULL);
+	//}
 
 	/* Execute OpenCL kernel as task parallel */
-	ret = clEnqueueNDRangeKernel(command_queue, kernel, 1, NULL, &global_item_size, &local_item_size, 0, NULL, NULL);
+	ret = clEnqueueNDRangeKernel(command_queue, kernel, 1, NULL, &global_item_size, NULL, 0, NULL, NULL);
 
 	/* Copy result to host */
 	ret = clEnqueueReadBuffer(command_queue, Finalmatrixmobj, CL_TRUE, 0, n * m * sizeof(double), finalmatrix, 0, NULL, NULL);
 
 	/* Display result */
+	printf("matrice finale\n");
 	for (i = 0; i < n; i++) {
 		for (j = 0; j < m; j++) {
-			printf("%5.2f\t", finalmatrix[i*j]);
+			printf("%5.2f\t", finalmatrix[i*m+j]);
 		}
 		printf("\n");
 	}
