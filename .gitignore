@@ -8,7 +8,7 @@ lab1/seq/lab1
 # Laboratoire 1
 lab2/lab2
 *.exe
-lab4/Debug/lab4.exe
+lab4/Debug
 *.exe
 *.pdb
-lab4/Debug/lab4.ilk
+lab4/Debug
